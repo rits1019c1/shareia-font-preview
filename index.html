@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Font Preview & PNG Exporter</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        /* 透明背景（チェッカー柄）表示用のパターン */
+        .checkerboard-bg {
+            background-color: #f0f0f0;
+            background-image: 
+                linear-gradient(45deg, #e0e0e0 25%, transparent 25%), 
+                linear-gradient(-45deg, #e0e0e0 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #e0e0e0 75%), 
+                linear-gradient(-45deg, transparent 75%, #e0e0e0 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+        .checkerboard-bg-dark {
+            background-color: #1e1e1e;
+            background-image: 
+                linear-gradient(45deg, #2a2a2a 25%, transparent 25%), 
+                linear-gradient(-45deg, #2a2a2a 25%, transparent 25%), 
+                linear-gradient(45deg, transparent 75%, #2a2a2a 75%), 
+                linear-gradient(-45deg, transparent 75%, #2a2a2a 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="border-b border-slate-800 bg-slate-950/50 backdrop-blur px-6 py-4 flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <div class="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/30">
+                <i class="fa-solid fa-font text-xl text-white"></i>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold bg-gradient-to-r from-white to-slate-400 bg-clip-text text-transparent">Font Preview & Transparent Exporter</h1>
+                <p class="text-xs text-slate-400">gilit-regular / kaleg-round-regular / vekos-regular</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <!-- Alert Toast Container -->
+            <div id="toast" class="hidden fixed top-5 right-5 z-50 bg-emerald-600 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2 transition-all duration-300">
+                <i class="fa-solid fa-circle-check"></i>
+                <span id="toast-message">メッセージ</span>
+            </div>
+
+            <!-- Action Buttons -->
+            <button id="btn-copy" class="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium rounded-xl shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2">
+                <i class="fa-solid fa-copy"></i>
+                <span>画像をコピー</span>
+            </button>
+            <button id="btn-download" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-900 text-slate-200 font-medium rounded-xl border border-slate-700 transition-all flex items-center gap-2">
+                <i class="fa-solid fa-download"></i>
+                <span>保存 (PNG)</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-0 overflow-hidden">
+        
+        <!-- Controls Panel (Left Sidebar) -->
+        <aside class="lg:col-span-4 xl:col-span-3 border-r border-slate-800 bg-slate-950/30 p-6 overflow-y-auto flex flex-col gap-6">
+            
+            <!-- Font Selector & File Upload Section -->
+            <section class="space-y-3">
+                <h2 class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-folder-open"></i> フォントファイル読み込み
+                </h2>
+                <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-3">
+                    <p class="text-xs text-slate-400 leading-relaxed">
+                        ローカルの TTF ファイル（<code class="text-indigo-300">.ttf</code>）を選択またはドラッグ＆ドロップしてください。
+                    </p>
+                    <label class="border-2 border-dashed border-slate-700 hover:border-indigo-500/50 bg-slate-950/50 hover:bg-slate-900/50 rounded-xl p-4 flex flex-col items-center justify-center cursor-pointer transition-all text-center group">
+                        <i class="fa-solid fa-cloud-arrow-up text-2xl text-slate-500 group-hover:text-indigo-400 transition-colors mb-2"></i>
+                        <span class="text-xs font-medium text-slate-300">TTF ファイルをドロップ</span>
+                        <span class="text-[10px] text-slate-500 mt-1">複数選択可 (gilit, kaleg, vekos等)</span>
+                        <input type="file" id="font-file-input" accept=".ttf,.otf,.woff,.woff2" multiple class="hidden">
+                    </label>
+
+                    <!-- Loaded Fonts List -->
+                    <div id="loaded-fonts-status" class="space-y-1.5 pt-1">
+                        <!-- Font status tags inserted dynamically -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Active Font Selection -->
+            <section class="space-y-3">
+                <h2 class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-font"></i> フォント切替
+                </h2>
+                <div class="grid grid-cols-1 gap-2" id="font-selector-group">
+                    <button data-font="gilit-regular" class="font-btn w-full px-4 py-3 bg-slate-800/80 border border-indigo-500 text-left rounded-xl text-sm font-medium hover:bg-slate-800 transition-all flex items-center justify-between group">
+                        <span class="font-name">gilit-regular</span>
+                        <span class="status-badge text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-400">未読み込み</span>
+                    </button>
+                    <button data-font="kaleg-round-regular" class="font-btn w-full px-4 py-3 bg-slate-900 border border-slate-800 text-left rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800/50 transition-all flex items-center justify-between group">
+                        <span class="font-name">kaleg-round-regular</span>
+                        <span class="status-badge text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-400">未読み込み</span>
+                    </button>
+                    <button data-font="vekos-regular" class="font-btn w-full px-4 py-3 bg-slate-900 border border-slate-800 text-left rounded-xl text-sm font-medium text-slate-400 hover:bg-slate-800/50 transition-all flex items-center justify-between group">
+                        <span class="font-name">vekos-regular</span>
+                        <span class="status-badge text-[10px] px-2 py-0.5 rounded bg-slate-700 text-slate-400">未読み込み</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- Text & Style Controls -->
+            <section class="space-y-4">
+                <h2 class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-sliders"></i> スタイル設定
+                </h2>
+                
+                <div class="space-y-3 text-sm">
+                    <!-- Text Color -->
+                    <div class="flex items-center justify-between">
+                        <label for="text-color" class="text-slate-300">文字色</label>
+                        <div class="flex items-center gap-2">
+                            <input type="color" id="text-color" value="#ffffff" class="w-8 h-8 rounded border-0 cursor-pointer bg-transparent">
+                            <span id="color-val" class="text-xs text-slate-400 font-mono">#FFFFFF</span>
+                        </div>
+                    </div>
+
+                    <!-- Font Size -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-slate-400">
+                            <span>文字サイズ</span>
+                            <span id="size-val" class="font-mono">72 px</span>
+                        </div>
+                        <input type="range" id="font-size" min="16" max="200" value="72" class="w-full accent-indigo-500 bg-slate-800 rounded-lg">
+                    </div>
+
+                    <!-- Letter Spacing -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-slate-400">
+                            <span>文字間隔 (Tracking)</span>
+                            <span id="spacing-val" class="font-mono">0 px</span>
+                        </div>
+                        <input type="range" id="letter-spacing" min="-10" max="50" value="0" class="w-full accent-indigo-500 bg-slate-800 rounded-lg">
+                    </div>
+
+                    <!-- Line Height -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-slate-400">
+                            <span>行高 (Line Height)</span>
+                            <span id="lineheight-val" class="font-mono">1.2</span>
+                        </div>
+                        <input type="range" id="line-height" min="0.8" max="2.5" step="0.1" value="1.2" class="w-full accent-indigo-500 bg-slate-800 rounded-lg">
+                    </div>
+
+                    <!-- Padding Around Text for Image Canvas -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-xs text-slate-400">
+                            <span>画像の余白 (Padding)</span>
+                            <span id="padding-val" class="font-mono">40 px</span>
+                        </div>
+                        <input type="range" id="canvas-padding" min="0" max="100" value="40" class="w-full accent-indigo-500 bg-slate-800 rounded-lg">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Preview Canvas Background Toggle (Does not affect export transparency) -->
+            <section class="space-y-3">
+                <h2 class="text-xs font-semibold text-indigo-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-eye"></i> プレビュー背景（確認用）
+                </h2>
+                <div class="grid grid-cols-3 gap-2">
+                    <button data-bg="checker-dark" class="bg-toggle-btn py-2 text-xs font-medium bg-slate-800 border border-indigo-500 text-white rounded-lg transition-all">
+                        市松 (暗)
+                    </button>
+                    <button data-bg="checker-light" class="bg-toggle-btn py-2 text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 rounded-lg transition-all">
+                        市松 (明)
+                    </button>
+                    <button data-bg="black" class="bg-toggle-btn py-2 text-xs font-medium bg-slate-900 border border-slate-800 text-slate-400 rounded-lg transition-all">
+                        黒背景
+                    </button>
+                </div>
+            </section>
+
+        </aside>
+
+        <!-- Preview Area (Right Side) -->
+        <section class="lg:col-span-8 xl:col-span-9 p-6 flex flex-col gap-6 overflow-y-auto">
+            
+            <!-- Text Input Area -->
+            <div class="space-y-2">
+                <label for="text-input" class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-pen-to-square"></i> プレビューテキスト入力
+                </label>
+                <textarea id="text-input" rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-4 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-indigo-500 transition-colors text-lg resize-y" placeholder="表示したいテキストを入力してください...">Sample Text / サンプル</textarea>
+            </div>
+
+            <!-- Visual Preview Workspace -->
+            <div class="flex-1 flex flex-col space-y-2">
+                <div class="flex justify-between items-center text-xs text-slate-400">
+                    <span>リアルタイムプレビュー (背景透過領域)</span>
+                    <span id="canvas-dim-info" class="font-mono">サイズ: 0 x 0 px</span>
+                </div>
+                
+                <!-- Stage where text is drawn -->
+                <div id="preview-container" class="flex-1 min-h-[350px] checkerboard-bg-dark border border-slate-800 rounded-2xl p-8 flex items-center justify-center overflow-auto shadow-inner relative">
+                    <!-- Invisible Canvas for rendering output -->
+                    <canvas id="export-canvas" class="hidden"></canvas>
+
+                    <!-- DOM Display Element -->
+                    <div id="preview-text" class="text-center transition-all duration-150 break-words max-w-full" style="font-family: 'gilit-regular', sans-serif;">
+                        Sample Text / サンプル
+                    </div>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // State management
+        const state = {
+            currentFont: 'gilit-regular',
+            loadedFonts: {
+                'gilit-regular': false,
+                'kaleg-round-regular': false,
+                'vekos-regular': false
+            },
+            text: 'Sample Text / サンプル',
+            color: '#ffffff',
+            fontSize: 72,
+            letterSpacing: 0,
+            lineHeight: 1.2,
+            padding: 40,
+            bgPreview: 'checker-dark'
+        };
+
+        // DOM elements
+        const textInput = document.getElementById('text-input');
+        const previewText = document.getElementById('preview-text');
+        const previewContainer = document.getElementById('preview-container');
+        const exportCanvas = document.getElementById('export-canvas');
+        const fontFileInput = document.getElementById('font-file-input');
+        const loadedFontsStatus = document.getElementById('loaded-fonts-status');
+        const fontBtns = document.querySelectorAll('.font-btn');
+        const bgBtns = document.querySelectorAll('.bg-toggle-btn');
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toast-message');
+        const canvasDimInfo = document.getElementById('canvas-dim-info');
+
+        // Inputs
+        const textColorInput = document.getElementById('text-color');
+        const colorVal = document.getElementById('color-val');
+        const fontSizeInput = document.getElementById('font-size');
+        const sizeVal = document.getElementById('size-val');
+        const letterSpacingInput = document.getElementById('letter-spacing');
+        const spacingVal = document.getElementById('spacing-val');
+        const lineHeightInput = document.getElementById('line-height');
+        const lineheightVal = document.getElementById('lineheight-val');
+        const paddingInput = document.getElementById('canvas-padding');
+        const paddingVal = document.getElementById('padding-val');
+
+        // Buttons
+        const btnCopy = document.getElementById('btn-copy');
+        const btnDownload = document.getElementById('btn-download');
+
+        // Initial setup
+        function init() {
+            updateStatusList();
+            updatePreviewStyles();
+
+            // Register File Upload Listener
+            fontFileInput.addEventListener('change', handleFontFiles);
+
+            // Drag and Drop support for entire document
+            window.addEventListener('dragover', (e) => e.preventDefault());
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                if (e.dataTransfer.files.length > 0) {
+                    handleFontFiles({ target: { files: e.dataTransfer.files } });
+                }
+            });
+
+            // Text input event
+            textInput.addEventListener('input', (e) => {
+                state.text = e.target.value || ' ';
+                previewText.textContent = state.text;
+                updateCanvasDimensions();
+            });
+
+            // Style inputs
+            textColorInput.addEventListener('input', (e) => {
+                state.color = e.target.value;
+                colorVal.textContent = state.color.toUpperCase();
+                updatePreviewStyles();
+            });
+
+            fontSizeInput.addEventListener('input', (e) => {
+                state.fontSize = parseInt(e.target.value, 10);
+                sizeVal.textContent = `${state.fontSize} px`;
+                updatePreviewStyles();
+            });
+
+            letterSpacingInput.addEventListener('input', (e) => {
+                state.letterSpacing = parseInt(e.target.value, 10);
+                spacingVal.textContent = `${state.letterSpacing} px`;
+                updatePreviewStyles();
+            });
+
+            lineHeightInput.addEventListener('input', (e) => {
+                state.lineHeight = parseFloat(e.target.value);
+                lineheightVal.textContent = state.lineHeight.toFixed(1);
+                updatePreviewStyles();
+            });
+
+            paddingInput.addEventListener('input', (e) => {
+                state.padding = parseInt(e.target.value, 10);
+                paddingVal.textContent = `${state.padding} px`;
+                updateCanvasDimensions();
+            });
+
+            // Font Selector Buttons
+            fontBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const fontName = btn.getAttribute('data-font');
+                    state.currentFont = fontName;
+
+                    fontBtns.forEach(b => {
+                        b.classList.remove('bg-slate-800/80', 'border-indigo-500', 'text-white');
+                        b.classList.add('bg-slate-900', 'border-slate-800', 'text-slate-400');
+                    });
+                    btn.classList.remove('bg-slate-900', 'border-slate-800', 'text-slate-400');
+                    btn.classList.add('bg-slate-800/80', 'border-indigo-500', 'text-white');
+
+                    updatePreviewStyles();
+                });
+            });
+
+            // Background toggles
+            bgBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const bgType = btn.getAttribute('data-bg');
+                    state.bgPreview = bgType;
+
+                    bgBtns.forEach(b => {
+                        b.classList.remove('bg-slate-800', 'border-indigo-500', 'text-white');
+                        b.classList.add('bg-slate-900', 'border-slate-800', 'text-slate-400');
+                    });
+                    btn.classList.remove('bg-slate-900', 'border-slate-800', 'text-slate-400');
+                    btn.classList.add('bg-slate-800', 'border-indigo-500', 'text-white');
+
+                    previewContainer.className = "flex-1 min-h-[350px] border border-slate-800 rounded-2xl p-8 flex items-center justify-center overflow-auto shadow-inner relative ";
+                    if (bgType === 'checker-dark') {
+                        previewContainer.classList.add('checkerboard-bg-dark');
+                    } else if (bgType === 'checker-light') {
+                        previewContainer.classList.add('checkerboard-bg');
+                    } else {
+                        previewContainer.classList.add('bg-black');
+                    }
+                });
+            });
+
+            // Copy and Download
+            btnCopy.addEventListener('click', copyImageToClipboard);
+            btnDownload.addEventListener('click', downloadImage);
+        }
+
+        // Font file handler
+        async function handleFontFiles(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            for (let file of files) {
+                const fileName = file.name;
+                // Match name with default fonts or register as custom font
+                let targetFontName = null;
+
+                if (fileName.includes('gilit')) targetFontName = 'gilit-regular';
+                else if (fileName.includes('kaleg')) targetFontName = 'kaleg-round-regular';
+                else if (fileName.includes('vekos')) targetFontName = 'vekos-regular';
+                else {
+                    // Extract font name without extension
+                    targetFontName = fileName.substring(0, fileName.lastIndexOf('.')) || fileName;
+                }
+
+                try {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const fontFace = new FontFace(targetFontName, arrayBuffer);
+                    await fontFace.load();
+                    document.fonts.add(fontFace);
+
+                    state.loadedFonts[targetFontName] = true;
+                    showToast(`フォント「${targetFontName}」を読み込みました`);
+                    
+                    // Auto select loaded font
+                    state.currentFont = targetFontName;
+                } catch (err) {
+                    console.error('Failed to load font:', err);
+                    showToast(`フォントの読み込みに失敗しました: ${fileName}`);
+                }
+            }
+
+            updateStatusList();
+            updatePreviewStyles();
+        }
+
+        // Update Font List status UI
+        function updateStatusList() {
+            loadedFontsStatus.innerHTML = '';
+            
+            // Check targets
+            const targetFonts = ['gilit-regular', 'kaleg-round-regular', 'vekos-regular'];
+            
+            targetFonts.forEach(fontName => {
+                const isLoaded = !!state.loadedFonts[fontName];
+                const btn = document.querySelector(`.font-btn[data-font="${fontName}"]`);
+                if (btn) {
+                    const badge = btn.querySelector('.status-badge');
+                    if (isLoaded) {
+                        badge.textContent = '読み込み済み';
+                        badge.className = 'status-badge text-[10px] px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-medium';
+                    } else {
+                        badge.textContent = '未読み込み';
+                        badge.className = 'status-badge text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-500';
+                    }
+                }
+            });
+
+            // Display status list
+            Object.keys(state.loadedFonts).forEach(f => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center justify-between text-xs py-1 px-2.5 bg-slate-950/60 rounded-lg border border-slate-800/80';
+                item.innerHTML = `
+                    <span class="font-mono ${state.loadedFonts[f] ? 'text-slate-200' : 'text-slate-500'}">${f}</span>
+                    <span class="${state.loadedFonts[f] ? 'text-emerald-400' : 'text-amber-500/80'} text-[10px]">
+                        ${state.loadedFonts[f] ? '<i class="fa-solid fa-check"></i> 準備完了' : '<i class="fa-solid fa-triangle-exclamation"></i> .ttf 未指定'}
+                    </span>
+                `;
+                loadedFontsStatus.appendChild(item);
+            });
+        }
+
+        // Apply style to HTML preview
+        function updatePreviewStyles() {
+            previewText.style.fontFamily = `"${state.currentFont}", sans-serif`;
+            previewText.style.color = state.color;
+            previewText.style.fontSize = `${state.fontSize}px`;
+            previewText.style.letterSpacing = `${state.letterSpacing}px`;
+            previewText.style.lineHeight = state.lineHeight;
+
+            // Update active state in selector UI if font was dynamically added
+            const fontBtns = document.querySelectorAll('.font-btn');
+            fontBtns.forEach(btn => {
+                if (btn.getAttribute('data-font') === state.currentFont) {
+                    btn.classList.remove('bg-slate-900', 'border-slate-800', 'text-slate-400');
+                    btn.classList.add('bg-slate-800/80', 'border-indigo-500', 'text-white');
+                } else {
+                    btn.classList.remove('bg-slate-800/80', 'border-indigo-500', 'text-white');
+                    btn.classList.add('bg-slate-900', 'border-slate-800', 'text-slate-400');
+                }
+            });
+
+            updateCanvasDimensions();
+        }
+
+        // Draw font on Canvas to get accurate dimensions and image output
+        function renderToCanvas() {
+            const canvas = exportCanvas;
+            const ctx = canvas.getContext('2d');
+
+            const lines = state.text.split('\n');
+            const fontSize = state.fontSize;
+            const lineHeightPx = fontSize * state.lineHeight;
+            const padding = state.padding;
+
+            // Measure bounds
+            ctx.font = `${fontSize}px "${state.currentFont}"`;
+            
+            let maxWidth = 0;
+            lines.forEach(line => {
+                // Approximate width with letter spacing
+                let width = 0;
+                for (let i = 0; i < line.length; i++) {
+                    width += ctx.measureText(line[i]).width + (i < line.length - 1 ? state.letterSpacing : 0);
+                }
+                if (width > maxWidth) maxWidth = width;
+            });
+
+            // Set canvas bounds with padding
+            const canvasWidth = Math.max(Math.ceil(maxWidth + padding * 2), 10);
+            const canvasHeight = Math.max(Math.ceil(lines.length * lineHeightPx + padding * 2), 10);
+
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+
+            // Clear Canvas (Transparent)
+            ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+            // Configure Text
+            ctx.font = `${fontSize}px "${state.currentFont}"`;
+            ctx.fillStyle = state.color;
+            ctx.textBaseline = 'top';
+
+            // Draw multi-line text with tracking
+            lines.forEach((line, lineIdx) => {
+                const y = padding + lineIdx * lineHeightPx;
+                let currentX = padding;
+
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    ctx.fillText(char, currentX, y);
+                    currentX += ctx.measureText(char).width + state.letterSpacing;
+                }
+            });
+
+            canvasDimInfo.textContent = `サイズ: ${canvasWidth} x ${canvasHeight} px`;
+            return canvas;
+        }
+
+        function updateCanvasDimensions() {
+            setTimeout(renderToCanvas, 50);
+        }
+
+        // Copy PNG to Clipboard
+        async function copyImageToClipboard() {
+            try {
+                const canvas = renderToCanvas();
+                canvas.toBlob(async (blob) => {
+                    if (!blob) {
+                        showToast('画像の生成に失敗しました');
+                        return;
+                    }
+                    try {
+                        const item = new ClipboardItem({ 'image/png': blob });
+                        await navigator.clipboard.write([item]);
+                        showToast('背景透過画像をクリップボードにコピーしました！');
+                    } catch (err) {
+                        console.error(err);
+                        showToast('クリップボードへのコピーに失敗しました');
+                    }
+                }, 'image/png');
+            } catch (e) {
+                console.error(e);
+                showToast('エラーが発生しました');
+            }
+        }
+
+        // Download PNG Image
+        function downloadImage() {
+            const canvas = renderToCanvas();
+            const link = document.createElement('a');
+            link.download = `${state.currentFont}_preview.png`;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+            showToast('PNG画像をダウンロードしました');
+        }
+
+        // Show toast notification
+        function showToast(message) {
+            toastMsg.textContent = message;
+            toast.classList.remove('hidden');
+            toast.classList.add('opacity-100');
+
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Run application
+        window.onload = init;
+    </script>
+</body>
+</html>
